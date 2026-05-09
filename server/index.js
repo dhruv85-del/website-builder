@@ -18,10 +18,20 @@ app.post("/api/stripe/webhook",express.raw({type:"application/json"}),stripeWebh
 const port=process.env.PORT || 5000
 app.use(express.json())
 app.use(cookieParser())
-app.use(cors({
-    origin:"http://localhost:5180",
-    credentials:true
-}))
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:5180").split(",")
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true)
+        } else {
+            callback(new Error("CORS origin denied"))
+        }
+    },
+    credentials: true
+}
+app.use(cors(corsOptions))
+
 app.use("/api/auth",authRouter)
 app.use("/api/user",userRouter)
 app.use("/api/website",websiteRouter)
