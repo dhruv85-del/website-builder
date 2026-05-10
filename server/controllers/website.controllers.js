@@ -341,11 +341,12 @@ export const deploy=async (req,res)=>{
         }
 
         if(!website.slug){
-            website.slug=website.title.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,60)+website._id.toString().slice(-5)              
+            website.slug=(website.title || "website").toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,60)+website._id.toString().slice(-5)              
         }
 
+        const originUrl = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null) || process.env.FRONTEND_URL || "http://localhost:5173";
         website.deployed=true
-        website.deployUrl=`${process.env.FRONTEND_URL}/site/${website.slug}`
+        website.deployUrl=`${originUrl}/site/${website.slug}`
         await website.save()
 
         return res.status(200).json({
