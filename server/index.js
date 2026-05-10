@@ -24,19 +24,22 @@ const allowedOrigins = [
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5180",
+    "https://website-builder-2-ey14.onrender.com",
     ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : [])
-].filter(Boolean);
+].filter(Boolean).map(url => url.trim().replace(/\/$/, ""));
 
 const corsOptions = {
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
             callback(null, true)
         } else {
             console.error(`CORS blocked request from origin: ${origin}`);
             callback(new Error("CORS origin denied"))
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }
 app.use(cors(corsOptions))
 
