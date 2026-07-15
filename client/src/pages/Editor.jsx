@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { serverUrl } from '../App'
 import { useState } from 'react'
-import { ArrowLeft, Code, Code2, MessageCircle, MessageSquare, Monitor, Rocket, Send, X } from 'lucide-react'
+import { ArrowLeft, Code, Code2, MessageCircle, MessageSquare, Monitor, Palette, Rocket, Send, X } from 'lucide-react'
 import { useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 
@@ -22,6 +22,7 @@ function WebsiteEditor() {
     const [updateLoading, setUpdateLoading] = useState(false)
     const [thinkingIndex, setThinkingIndex] = useState(0)
     const [showCode, setShowCode] = useState(false)
+    const [stylePreset, setStylePreset] = useState("minimal")
 
     const handleEditorDidMount = (editor, monaco) => {
         editorRef.current = editor;
@@ -71,16 +72,33 @@ function WebsiteEditor() {
         setUpdateLoading(true)
         const text = prompt
         setPrompt("")
-        setMessages((m) => [...m, { role: "user", content: prompt }])
+        setMessages((m) => [...m, { role: "user", content: text }])
         try {
-            const result = await axios.post(`${serverUrl}/api/website/update/${id}`, { prompt: text }, { withCredentials: true })
-            console.log(result)
-            setUpdateLoading(false)
+            const result = await axios.post(`${serverUrl}/api/website/update/${id}`, { prompt: text, stylePreset }, { withCredentials: true })
             setMessages((m) => [...m, { role: "ai", content: result.data.message }])
             setCode(result.data.code)
         } catch (error) {
-            setUpdateLoading(false)
             console.log(error)
+        } finally {
+            setUpdateLoading(false)
+        }
+    }
+
+    const handleApplyStyle = async () => {
+        if (updateLoading) return
+
+        setUpdateLoading(true)
+        const styleMessage = `Apply a ${stylePreset} visual style to this website while preserving the current structure and content.`
+        setMessages((m) => [...m, { role: "user", content: styleMessage }])
+
+        try {
+            const result = await axios.post(`${serverUrl}/api/website/update/${id}`, { prompt: styleMessage, stylePreset }, { withCredentials: true })
+            setMessages((m) => [...m, { role: "ai", content: result.data.message }])
+            setCode(result.data.code)
+        } catch (error) {
+            console.log(error)
+        } finally {
+            setUpdateLoading(false)
         }
     }
 
@@ -117,6 +135,7 @@ function WebsiteEditor() {
                 setWebsite(result.data)
                 setCode(result.data.latestCode)
                 setMessages(result.data.conversation)
+                setStylePreset(result.data.stylePreset || "minimal")
             } catch (error) {
                 console.log(error)
                 setError(error.response.data.message)
@@ -211,7 +230,25 @@ function WebsiteEditor() {
             <div className='flex-1 flex flex-col'>
                 <div className='h-14 px-4 flex justify-between items-center border-b border-white/10 bg-black/80'>
                     <span className='text-xs text-zinc-400'>Live Preview</span>
-                    <div className='flex gap-2'>
+                    <div className='flex flex-wrap items-center justify-end gap-2'>
+                        <select
+                            value={stylePreset}
+                            onChange={(e) => setStylePreset(e.target.value)}
+                            className='rounded-lg border border-white/10 bg-black px-3 py-1.5 text-sm text-white outline-none'
+                        >
+                            <option value='minimal'>Minimal</option>
+                            <option value='luxury'>Luxury</option>
+                            <option value='playful'>Playful</option>
+                            <option value='tech'>Tech</option>
+                            <option value='bold'>Bold</option>
+                        </select>
+                        <button
+                            onClick={handleApplyStyle}
+                            disabled={updateLoading}
+                            className='flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-60'
+                        >
+                            <Palette size={14} /> Apply Style
+                        </button>
                         {website.deployed ?"": <button className='flex items-center gap-2 px-4 py-1.5 rounded-lg bg-linear-to-r from-indigo-500 to-purple-500 text-sm font-semibold hover:scale-105 transition'
                         onClick={handleDeploy}
                         ><Rocket size={14} /> Deploy</button>}

@@ -3,6 +3,18 @@ import User from "../models/user.model.js";
 import Website from "../models/website.model.js";
 import extractJson from "../utils/extractJson.js";
 
+const styleInstructions = {
+    minimal: "Use a minimal, refined aesthetic with lots of whitespace, a restrained color palette, elegant typography, soft shadows, and calm modern spacing.",
+    luxury: "Use a premium luxury aesthetic with sophisticated colors, elegant typography, generous spacing, polished details, and a high-end editorial feel.",
+    playful: "Use a playful and energetic aesthetic with bright colors, rounded shapes, cheerful copy, friendly interactions, and lively spacing.",
+    tech: "Use a futuristic tech aesthetic with dark backgrounds, neon accents, glassmorphism, sharp geometric shapes, and modern UI details.",
+    bold: "Use a bold editorial aesthetic with strong contrast, oversized typography, dramatic spacing, confident hierarchy, and striking visual emphasis."
+}
+
+const getStyleInstruction = (stylePreset = "minimal") => {
+    return styleInstructions[stylePreset] || styleInstructions.minimal
+}
+
 const masterPrompt = `
 YOU ARE A PRINCIPAL FRONTEND ARCHITECT
 AND A SENIOR UI/UX ENGINEER
@@ -154,20 +166,25 @@ ABSOLUTE RULES
 
 export const generateWebsite = async (req, res) => {
     try {
-        const { prompt } = req.body
+        const { prompt, stylePreset } = req.body
         if (!prompt) {
             return res.status(400).json({ message: "prompt is required" })
         }
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Authentication required" })
+        }
+
         const user = await User.findById(req.user._id)
 
         if (!user) {
-            return res.status(400).json({ message: "user not found" })
+            return res.status(401).json({ message: "user not found" })
         }
         if (user.credits < 50) {
             return res.status(400).json({ message: "you have not enough credits to generate a webiste" })
         }
 
-        const finalPrompt = masterPrompt.replace("USER_PROMPT", prompt)
+        const selectedStyle = (stylePreset || "minimal").toLowerCase()
+        const finalPrompt = masterPrompt.replace("USER_PROMPT", `${prompt}\n\nSTYLE PREFERENCE:\n${getStyleInstruction(selectedStyle)}`)
         let raw = ""
         let parsed = null
         for (let i = 0; i < 2 && !parsed; i++) {
@@ -189,6 +206,7 @@ export const generateWebsite = async (req, res) => {
         const website = await Website.create({
             user: user._id,
             title: prompt.slice(0, 60),
+            stylePreset: selectedStyle,
             latestCode: parsed.code,
             conversation: [
                 {
@@ -212,13 +230,21 @@ export const generateWebsite = async (req, res) => {
         })
 
     } catch (error) {
-        return res.status(500).json({ message: `generate website error ${error}` })
+        console.error("Generate website error:", error)
+        if (error.message?.includes("OpenRouter") || error.message?.includes("credits") || error.message?.includes("token limit")) {
+            return res.status(402).json({ message: "The AI generator is currently unavailable because the OpenRouter account has insufficient credits or the request is too large. Please try again shortly." })
+        }
+        return res.status(500).json({ message: "Failed to generate website", error: error.message })
     }
 }
 
 
 export const getWebsiteById = async (req, res) => {
     try {
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Authentication required" })
+        }
+
         const website = await Website.findOne({
             _id: req.params.id,
             user: req.user._id
@@ -236,9 +262,13 @@ export const getWebsiteById = async (req, res) => {
 
 export const changes = async (req, res) => {
     try {
-        const { prompt } = req.body
+        const { prompt, stylePreset } = req.body
         if (!prompt) {
             return res.status(400).json({ message: "prompt is required" })
+        }
+
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Authentication required" })
         }
 
         const website = await Website.findOne({
@@ -259,6 +289,7 @@ export const changes = async (req, res) => {
             return res.status(400).json({ message: "you have not enough credits to generate a webiste" })
         }
 
+        const selectedStyle = (stylePreset || website.stylePreset || "minimal").toLowerCase()
         const updatePrompt = `
 UPDATE THIS HTML WEBSITE.
 
@@ -267,6 +298,9 @@ ${website.latestCode}
 
 USER REQUEST:
 ${prompt}
+
+STYLE PREFERENCE:
+${getStyleInstruction(selectedStyle)}
 
 RETURN RAW JSON ONLY:
 {
@@ -298,6 +332,7 @@ RETURN RAW JSON ONLY:
             { role: "ai", content: parsed.message },
         )
 
+        website.stylePreset = selectedStyle
         website.latestCode = parsed.code
 
         await website.save()
@@ -312,8 +347,11 @@ RETURN RAW JSON ONLY:
 
 
     } catch (error) {
-        console.log(error)
- return res.status(500).json({ message: `update website error ${error}` })
+        console.error("Update website error:", error)
+        if (error.message?.includes("OpenRouter") || error.message?.includes("credits") || error.message?.includes("token limit")) {
+            return res.status(402).json({ message: "The AI generator is currently unavailable because the OpenRouter account has insufficient credits or the request is too large. Please try again shortly." })
+        }
+        return res.status(500).json({ message: "Failed to update website", error: error.message })
     }
 }
 
@@ -321,6 +359,10 @@ RETURN RAW JSON ONLY:
 
 export const getAll=async (req,res) => {
     try {
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Authentication required" })
+        }
+
         const websites=await Website.find({user:req.user._id})
         return res.status(200).json(websites)
     } catch (error) {
@@ -331,6 +373,10 @@ export const getAll=async (req,res) => {
 
 export const deploy=async (req,res)=>{
     try {
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: "Authentication required" })
+        }
+
          const website = await Website.findOne({
             _id: req.params.id,
             user: req.user._id

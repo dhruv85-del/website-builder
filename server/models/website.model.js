@@ -24,6 +24,10 @@ const websiteSchema=new mongoose.Schema({
         type:String,
         default:"Untitled Website"
     },
+    stylePreset:{
+        type:String,
+        default:"minimal"
+    },
     latestCode:{
         type:String,
         required:true
